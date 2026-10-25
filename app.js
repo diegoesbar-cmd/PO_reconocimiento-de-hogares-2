@@ -37,7 +37,7 @@
       ['Licenciatura / Técnico', 'Licenciatura / Técnico'], ['Posgrado', 'Posgrado']
     ],
     salud: [
-      ['Ninguno', 'Ninguno / Sin afiliación'], ['IMSS / IMSS-Bienestar', 'IMSS / IMSS-Bienestar'],
+      ['Ninguno', 'Ninguno / Sin afiliación'], ['IMSS'], ['IMSS-Bienestar', 'IMSS / IMSS-Bienestar'],
       ['ISSSTE', 'ISSSTE'], ['Privado', 'Servicio privado'], ['Otro', 'Otro']
     ],
     discapacidad: [
