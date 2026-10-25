@@ -1,6 +1,6 @@
 /* Service worker: precache de toda la app y respuesta desde caché.
  * Para publicar una versión nueva: cambia VERSION (aquí y APP_VERSION en app.js). */
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const CACHE = `hogares-${VERSION}`;
 
 const PRECACHE = [

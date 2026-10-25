@@ -4,7 +4,7 @@
   // ======================================================================
   //  Constantes
   // ======================================================================
-  const APP_VERSION = '1.0.0';
+  const APP_VERSION = '1.0.1';
   const MAX_MEMBERS = 12;
   const DB_NAME = 'OfflineSurveysDB';
   const DB_VERSION = 2;
@@ -128,56 +128,81 @@
     });
   }
 
+  // El navegador puede cerrar la conexión (p. ej. al pasar la app a segundo plano
+  // en iPhone o por falta de memoria). Estas funciones la reabren automáticamente.
+  function attachDB(d) {
+    d.onclose = () => { if (db === d) db = null; };
+    d.onversionchange = () => { try { d.close(); } catch (_) { /* nada */ } if (db === d) db = null; };
+    return d;
+  }
+
+  async function ensureDB() {
+    if (!db) db = attachDB(await openDB());
+    return db;
+  }
+
+  async function newTx(store, mode) {
+    const d = await ensureDB();
+    try {
+      return d.transaction(store, mode);
+    } catch (err) {
+      if (err && err.name === 'InvalidStateError') {
+        // Conexión cerrada por el navegador: reabrir y reintentar una vez
+        try { d.close(); } catch (_) { /* nada */ }
+        if (db === d) db = null;
+        const d2 = await ensureDB();
+        return d2.transaction(store, mode);
+      }
+      throw err;
+    }
+  }
+
   async function addSurvey(rec) {
-    const tx = db.transaction('surveys', 'readwrite');
+    const tx = await newTx('surveys', 'readwrite');
     tx.objectStore('surveys').add(rec);
     await txDone(tx);
   }
 
   async function getAllSurveys() {
-    const tx = db.transaction('surveys', 'readonly');
+    const tx = await newTx('surveys', 'readonly');
     const rows = await reqResult(tx.objectStore('surveys').getAll());
     return rows || [];
   }
 
-  function markSynced(id) {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction('surveys', 'readwrite');
-      const st = tx.objectStore('surveys');
-      const g = st.get(id);
-      g.onsuccess = () => {
-        const rec = g.result;
-        if (rec) {
-          rec.synced = true;
-          rec.syncedAt = new Date().toISOString();
-          st.put(rec);
-        }
-      };
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error);
-    });
+  async function markSynced(id) {
+    const tx = await newTx('surveys', 'readwrite');
+    const st = tx.objectStore('surveys');
+    const g = st.get(id);
+    g.onsuccess = () => {
+      const rec = g.result;
+      if (rec) {
+        rec.synced = true;
+        rec.syncedAt = new Date().toISOString();
+        st.put(rec);
+      }
+    };
+    await txDone(tx);
   }
 
   async function deleteSurvey(id) {
-    const tx = db.transaction('surveys', 'readwrite');
+    const tx = await newTx('surveys', 'readwrite');
     tx.objectStore('surveys').delete(id);
     await txDone(tx);
   }
 
   async function putMeta(rec) {
-    const tx = db.transaction('meta', 'readwrite');
+    const tx = await newTx('meta', 'readwrite');
     tx.objectStore('meta').put(rec);
     await txDone(tx);
   }
 
   async function getMeta(key) {
-    const tx = db.transaction('meta', 'readonly');
+    const tx = await newTx('meta', 'readonly');
     return reqResult(tx.objectStore('meta').get(key));
   }
 
   async function deleteMeta(key) {
-    const tx = db.transaction('meta', 'readwrite');
+    const tx = await newTx('meta', 'readwrite');
     tx.objectStore('meta').delete(key);
     await txDone(tx);
   }
@@ -479,7 +504,10 @@
   }
 
   async function saveSurvey() {
-    if (!db) { toast('El almacenamiento local no está disponible; no se puede guardar.', 'err'); return; }
+    try { await ensureDB(); } catch (err) {
+      toast('El almacenamiento local no está disponible; no se puede guardar. ' + (err && err.message ? err.message : ''), 'err');
+      return;
+    }
     for (let s = 1; s <= 3; s++) {
       clearErrors();
       const bad = validateStep(s);
@@ -503,7 +531,8 @@
       await addSurvey(rec); // espera a que la transacción confirme
     } catch (err) {
       console.error(err);
-      toast('No se pudo guardar la encuesta: ' + (err && err.message ? err.message : err), 'err');
+      toast('No se pudo guardar la encuesta: ' + (err && err.message ? err.message : err) +
+        '. Tus datos siguen en pantalla: no cierres esta página, pulsa de nuevo «Guardar encuesta» o avisa al coordinador.', 'err');
       return;
     } finally {
       $('btnSave').disabled = false;
@@ -528,7 +557,7 @@
   }
 
   async function saveDraft() {
-    if (!db || suspendDraft) return;
+    if (suspendDraft) return;
     try {
       await putMeta({
         key: 'draft',
@@ -585,7 +614,7 @@
       renderMembers();
       clearErrors();
       showStep(1);
-      if (db) { try { await deleteMeta('draft'); } catch (_) { /* no crítico */ } }
+      try { await deleteMeta('draft'); } catch (_) { /* no crítico */ }
     } finally {
       suspendDraft = false;
     }
@@ -624,7 +653,6 @@
 
   async function syncPending(manual) {
     if (syncing) return;
-    if (!db) return;
     if (!cfg.url) {
       if (manual) { toast('Primero configura la URL de envío.', 'err'); openModal('configModal'); }
       return;
@@ -682,7 +710,6 @@
   //  Lista local, conteo de pendientes
   // ======================================================================
   async function refreshPending() {
-    if (!db) return;
     try {
       const all = await getAllSurveys();
       const pend = all.filter((s) => !s.synced).length;
@@ -935,7 +962,11 @@
 
     window.addEventListener('online', () => { updateNetwork(); syncPending(); });
     window.addEventListener('offline', updateNetwork);
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveDraft(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') saveDraft();
+      else ensureDB().catch(() => {}); // al volver a la app, reabre la base si el sistema la cerró
+    });
+    window.addEventListener('pageshow', () => { ensureDB().catch(() => {}); });
   }
 
   async function init() {
@@ -954,7 +985,7 @@
     registerSW();
 
     try {
-      db = await openDB();
+      await ensureDB();
     } catch (err) {
       console.error(err);
       toast('Almacenamiento local no disponible: ' + err.message, 'err');
