@@ -27,7 +27,7 @@
         </div>
         <div>
           <h1>Reconocimiento de Hogares</h1>
-          <p>Cuestionario de campo sin conexión · Oaxaca</p>
+          <p id="formTitle">Cuestionario de campo sin conexión</p>
         </div>
       </div>
       <button type="button" class="btn btn-soft" id="btnPending" aria-label="Encuestas guardadas en este dispositivo">
@@ -41,161 +41,29 @@
     <!-- Progreso -->
     <section class="card progress" aria-label="Progreso">
       <div class="progress-head">
-        <span id="stepLabel" class="eyebrow">Paso 1 de 4</span>
-        <span id="stepPercent" class="percent">25%</span>
+        <span id="stepLabel" class="eyebrow">Cargando…</span>
+        <span id="stepPercent" class="percent"></span>
       </div>
-      <div class="bar"><div id="progressBar" class="bar-fill" style="width:25%"></div></div>
-      <div class="tabs" role="tablist">
-        <button type="button" class="tab is-active" data-goto="1">1. Datos</button>
-        <button type="button" class="tab" data-goto="2">2. Vivienda</button>
-        <button type="button" class="tab" data-goto="3">3. Integrantes</button>
-        <button type="button" class="tab" data-goto="4">4. Cierre</button>
-      </div>
+      <div class="bar"><div id="progressBar" class="bar-fill" style="width:0%"></div></div>
+      <div id="tabs" class="tabs" role="tablist"></div>
     </section>
 
     <form id="surveyForm" novalidate autocomplete="off">
-
-      <!-- PASO 1 -->
-      <section id="step1" class="step card">
-        <div class="card-head">
-          <h2>Identificación y ubicación</h2>
-          <span class="tag">Sección A</span>
-        </div>
-        <div class="grid">
-          <div class="field">
-            <label for="fecha">Fecha de la entrevista *</label>
-            <input type="date" id="fecha">
-          </div>
-          <div class="field">
-            <label for="folio">Folio de encuesta / clave de manzana *</label>
-            <input type="text" id="folio" placeholder="Ej. OAX-2026-001" autocapitalize="characters" class="upper">
-          </div>
-          <div class="field">
-            <label for="encuestador">Encuestador(a) *</label>
-            <input type="text" id="encuestador" placeholder="Nombre completo" autocomplete="name">
-          </div>
-          <div class="field">
-            <label for="municipio">Municipio *</label>
-            <input type="text" id="municipio" placeholder="Ej. Oaxaca de Juárez">
-          </div>
-          <div class="field">
-            <label for="localidad">Localidad / colonia *</label>
-            <input type="text" id="localidad" placeholder="Ej. Centro / San Felipe">
-          </div>
-          <div class="field">
-            <label for="direccion">Calle y número (o referencia) *</label>
-            <input type="text" id="direccion" placeholder="Ej. Av. Hidalgo 402">
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="gps">Coordenadas GPS (opcional)</label>
-          <div class="row">
-            <input type="text" id="gps" readonly placeholder="Latitud, longitud (sin capturar)" class="mono">
-            <button type="button" class="btn btn-dark" id="btnGps">Obtener GPS</button>
-          </div>
-          <p id="gpsStatus" class="hint">Funciona sin internet, pero requiere permiso de ubicación.</p>
-        </div>
-      </section>
-
-      <!-- PASO 2 -->
-      <section id="step2" class="step card" hidden>
-        <div class="card-head">
-          <h2>Características de la vivienda</h2>
-          <span class="tag">Sección B</span>
-        </div>
-        <div class="grid">
-          <div class="field">
-            <label for="tipoVivienda">Tipo de vivienda *</label>
-            <select id="tipoVivienda">
-              <option value="">-- Seleccionar --</option>
-              <option value="Casa independiente">Casa independiente</option>
-              <option value="Departamento en edificio">Departamento en edificio</option>
-              <option value="Vivienda en vecindad/cuartería">Vivienda en vecindad / cuartería</option>
-              <option value="Cuarto en azotea / Improvisado">Cuarto improvisado / en azotea</option>
-              <option value="Otro">Otro tipo</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="tenenciaVivienda">Tenencia de la vivienda *</label>
-            <select id="tenenciaVivienda">
-              <option value="">-- Seleccionar --</option>
-              <option value="Propia">Propia</option>
-              <option value="Rentada">Rentada</option>
-              <option value="Prestada / Cedida">Prestada / cedida por familiares</option>
-              <option value="En litigio / Irregular">En litigio / asentamiento irregular</option>
-            </select>
-          </div>
-        </div>
-
-        <fieldset class="field">
-          <legend>Servicios disponibles en la vivienda (marcar los que apliquen)</legend>
-          <div class="checks">
-            <label class="check"><input type="checkbox" name="servicios" value="Agua entubada"><span>Agua entubada</span></label>
-            <label class="check"><input type="checkbox" name="servicios" value="Drenaje / Alcantarillado"><span>Drenaje / alcantarillado</span></label>
-            <label class="check"><input type="checkbox" name="servicios" value="Energía Eléctrica"><span>Energía eléctrica</span></label>
-            <label class="check"><input type="checkbox" name="servicios" value="Gas para cocinar"><span>Gas para cocinar</span></label>
-            <label class="check"><input type="checkbox" name="servicios" value="Internet / Telefonía"><span>Internet / telefonía</span></label>
-            <label class="check"><input type="checkbox" name="servicios" value="Sanitario exclusivo"><span>Sanitario exclusivo</span></label>
-          </div>
-        </fieldset>
-      </section>
-
-      <!-- PASO 3 -->
-      <section id="step3" class="step card" hidden>
-        <div class="card-head">
-          <div>
-            <h2>Integrantes del hogar</h2>
-            <p class="hint">Empieza por la jefatura del hogar (máximo 12 integrantes).</p>
-          </div>
-          <span id="memberCount" class="tag tag-brand">1 integrante</span>
-        </div>
-
-        <div id="membersContainer" class="members"></div>
-
-        <div class="row row-between">
-          <button type="button" class="btn btn-dark" id="btnAddMember">+ Agregar integrante</button>
-          <span class="hint">Límite: 12</span>
-        </div>
-      </section>
-
-      <!-- PASO 4 -->
-      <section id="step4" class="step card" hidden>
-        <div class="card-head">
-          <h2>Resumen y observaciones</h2>
-          <span class="tag">Cierre</span>
-        </div>
-
-        <div class="summary">
-          <div><strong id="sumTotal">0</strong><span>Integrantes</span></div>
-          <div><strong id="sumMinors">0</strong><span>Menores (&lt;18)</span></div>
-          <div><strong id="sumSeniors">0</strong><span>Adultos mayores (60+)</span></div>
-          <div><strong id="sumDisability">0</strong><span>Con discapacidad</span></div>
-        </div>
-
-        <div class="field">
-          <label for="observaciones">Observaciones / incidentes en campo</label>
-          <textarea id="observaciones" rows="3" placeholder="Notas sobre la entrevista, disponibilidad, detalles relevantes…"></textarea>
-        </div>
-
-        <div class="note">
-          <strong>Guardado local activado.</strong>
-          Al pulsar «Guardar encuesta» los datos quedan en este dispositivo. Se enviarán a la hoja de Google cuando haya internet y el envío esté configurado.
-        </div>
-      </section>
+      <div id="stepsHost"></div>
 
       <div class="nav">
         <button type="button" class="btn btn-ghost" id="btnPrev" hidden>← Anterior</button>
         <div class="nav-right">
           <button type="button" class="btn btn-primary" id="btnNext">Siguiente →</button>
-          <button type="button" class="btn btn-primary" id="btnSave" hidden>Guardar encuesta</button>
         </div>
       </div>
     </form>
+
+    <noscript><p class="note">Esta aplicación necesita JavaScript.</p></noscript>
   </main>
 
   <footer class="footer">
-    <p>Operación de campo · v<span id="appVersion"></span></p>
+    <p>Operación de campo · app v<span id="appVersion"></span> · cuestionario <span id="formVersion"></span></p>
     <p id="offlineState" class="offline-state">Verificando modo sin conexión…</p>
   </footer>
 
@@ -218,7 +86,7 @@
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Folio</th><th>Fecha</th><th>Pers.</th><th>Estado</th><th></th></tr>
+              <tr><th>ID hogar</th><th>Fecha</th><th>Pers.</th><th>Estado</th><th></th></tr>
             </thead>
             <tbody id="surveyTableBody"></tbody>
           </table>
@@ -261,6 +129,7 @@
 
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
+  <script src="cuestionario.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>

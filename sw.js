@@ -1,12 +1,20 @@
 /* Service worker: precache de toda la app y respuesta desde caché.
- * Para publicar una versión nueva: cambia VERSION (aquí y APP_VERSION en app.js). */
-const VERSION = '1.0.1';
-const CACHE = `hogares-${VERSION}`;
+ *
+ * - Si cambias SOLO el cuestionario (cuestionario.js): no hay que tocar nada aquí. El navegador
+ *   detecta que cuestionario.js cambió (se importa abajo) y actualiza la app solo.
+ * - Si cambias el código de la app (app.js, styles.css, index.html): sube VERSION aquí
+ *   y APP_VERSION en app.js. */
+self.window = self;
+importScripts('cuestionario.js');
+const VERSION = '2.0.0';
+const FORM = (self.CUESTIONARIO && self.CUESTIONARIO.meta && self.CUESTIONARIO.meta.version) || '0';
+const CACHE = `hogares-${VERSION}-${FORM}`;
 
 const PRECACHE = [
   './',
   'index.html',
   'styles.css',
+  'cuestionario.js',
   'app.js',
   'manifest.webmanifest',
   'icons/icon-192.png',
@@ -16,7 +24,8 @@ const PRECACHE = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
-      .then((cache) => cache.addAll(PRECACHE))
+      // cache: 'reload' evita que el caché HTTP de GitHub Pages (≈10 min) entregue archivos viejos
+      .then((cache) => cache.addAll(PRECACHE.map((u) => new Request(u, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
   );
 });

@@ -1,29 +1,24 @@
 /**
- * Receptor de encuestas «Reconocimiento de Hogares» → Google Sheets.
+ * Receptor de encuestas «Reconocimiento de Hogares» → Google Sheets  (v2, genérico).
  *
  * Qué hace:
  *  - Exige un token (propiedad de script TOKEN) para aceptar datos.
- *  - Es idempotente: si la app reintenta un envío, no duplica filas (clave: id).
- *  - Escribe dos hojas: «Hogares» (una fila por hogar) e «Integrantes» (una fila por persona).
+ *  - Es idempotente: si la app reintenta un envío, no duplica filas (clave: _id).
+ *  - NO depende de las preguntas del cuestionario: crea solo las columnas que falten.
+ *    Por eso, al cambiar el cuestionario NO hay que tocar ni volver a publicar este script.
+ *  - Escribe una pestaña «Hogares» (una fila por hogar) y una pestaña por cada bloque
+ *    repetido del cuestionario (p. ej. «integrantes»: una fila por persona, ligada por _id_hogar).
  *
- * Configuración: ver README.md (Implementar > Nueva implementación > Aplicación web,
- * ejecutar como «Yo» y acceso «Cualquier persona»).
+ * Configuración (ver README.md):
+ *  - Propiedad de script TOKEN (obligatoria): la clave que se comparte con el equipo.
+ *  - Propiedad de script SHEET_ID (solo si el script NO se creó desde la hoja con
+ *    Extensiones > Apps Script): el ID de la hoja de cálculo de destino.
  */
 
-var VERSION = '1.0.0';
-var SHEET_HOGARES = 'Hogares';
-var SHEET_INTEGRANTES = 'Integrantes';
-
-var H_HEADERS = [
-  'id', 'folio', 'fecha', 'encuestador', 'municipio', 'localidad', 'direccion', 'gps',
-  'gps_precision_m', 'tipo_vivienda', 'tenencia', 'servicios', 'total_integrantes', 'menores',
-  'adultos_mayores', 'con_discapacidad', 'observaciones', 'capturado_en', 'recibido_en'
-];
-
-var I_HEADERS = [
-  'id_hogar', 'folio', 'num', 'nombre', 'sexo', 'edad', 'parentesco', 'escolaridad',
-  'ocupacion', 'afiliacion_salud', 'discapacidad'
-];
+var VERSION = '2.0.0';
+var SHEET_MAIN = 'Hogares';
+var FIXED_MAIN = ['_id', '_recibido_en', '_capturado_en', '_estado', '_version_app', '_version_cuestionario'];
+var FIXED_REP = ['_id_hogar', 'hogar_id', '_num'];
 
 /** Prueba de conexión desde la app («Probar conexión»). No expone datos. */
 function doGet(e) {
@@ -48,44 +43,49 @@ function doPost(e) {
     }
 
     var s = body.survey;
-    if (!s || !s.id) {
-      return json_({ status: 'error', message: 'Falta la encuesta o su id.' });
+    if (!s || !s.id || !s.answers || typeof s.answers !== 'object') {
+      return json_({ status: 'error', message: 'Falta la encuesta, su id o sus respuestas.' });
     }
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var shH = getSheet_(ss, SHEET_HOGARES, H_HEADERS);
-    var shI = getSheet_(ss, SHEET_INTEGRANTES, I_HEADERS);
+    var ss = openSpreadsheet_();
+    var shMain = getSheet_(ss, SHEET_MAIN, FIXED_MAIN[0]);
 
     // Idempotencia: la fila de «Hogares» es la marca de que el envío quedó completo.
-    if (idExists_(shH, s.id)) {
+    if (idExists_(shMain, s.id)) {
       return json_({ status: 'duplicate', id: s.id });
     }
 
-    // Si un intento anterior se cortó a la mitad, borra integrantes huérfanos de este id.
-    deleteRowsById_(shI, s.id);
-
-    var integrantes = s.integrantes || [];
-    if (integrantes.length) {
-      var rowsI = integrantes.map(function (m) {
-        return [
-          s.id, safe_(s.folio), m.num, safe_(m.nombre), safe_(m.sexo), m.edad, safe_(m.parentesco),
-          safe_(m.escolaridad), safe_(m.ocupacion), safe_(m.salud), safe_(m.discapacidad)
-        ];
+    // 1) Bloques repetidos (integrantes, etc.)
+    var repeats = s.repeats || {};
+    Object.keys(repeats).forEach(function (name) {
+      var list = repeats[name] || [];
+      var sh = getSheet_(ss, name, FIXED_REP[0]);
+      // Si un intento anterior se cortó a la mitad, borra filas huérfanas de este hogar.
+      deleteRowsById_(sh, s.id);
+      if (!list.length) return;
+      var rows = list.map(function (item, i) {
+        var r = { _id_hogar: s.id, hogar_id: s.answers.hogar_id || '', _num: i + 1 };
+        Object.keys(item).forEach(function (k) { r[k] = item[k]; });
+        return r;
       });
-      shI.getRange(shI.getLastRow() + 1, 1, rowsI.length, I_HEADERS.length).setValues(rowsI);
-    }
+      writeRows_(sh, FIXED_REP, rows);
+    });
 
-    shH.appendRow([
-      s.id, safe_(s.folio), safe_(s.fecha), safe_(s.encuestador), safe_(s.municipio),
-      safe_(s.localidad), safe_(s.direccion), safe_(s.gps), s.gpsPrecisionM || '',
-      safe_(s.tipoVivienda), safe_(s.tenenciaVivienda), safe_((s.servicios || []).join('; ')),
-      s.totalMiembros || 0, s.menores || 0, s.adultosMayores || 0, s.discapacidad || 0,
-      safe_(s.observaciones), safe_(s.timestamp), new Date().toISOString()
-    ]);
+    // 2) Fila principal (al final: es lo que marca el envío como completo)
+    var main = {
+      _id: s.id,
+      _recibido_en: new Date().toISOString(),
+      _capturado_en: s.timestamp || '',
+      _estado: s.estado || '',
+      _version_app: s.appVersion || '',
+      _version_cuestionario: s.formVersion || ''
+    };
+    Object.keys(s.answers).forEach(function (k) { main[k] = s.answers[k]; });
+    writeRows_(shMain, FIXED_MAIN, [main]);
 
     return json_({ status: 'ok', id: s.id });
   } catch (err) {
-    return json_({ status: 'error', message: String(err) });
+    return json_({ status: 'error', message: String(err && err.message ? err.message : err) });
   } finally {
     if (locked) {
       try { lock.releaseLock(); } catch (_) { /* nada */ }
@@ -100,15 +100,106 @@ function json_(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-function getSheet_(ss, name, headers) {
-  var sh = ss.getSheetByName(name);
-  if (!sh) sh = ss.insertSheet(name);
-  if (sh.getLastRow() === 0) {
-    sh.appendRow(headers);
-    sh.setFrozenRows(1);
-    sh.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+function openSpreadsheet_() {
+  var id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
+  if (id) return SpreadsheetApp.openById(id);
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss) return ss;
+  throw new Error('No se encontró la hoja de destino. Agrega la propiedad de script SHEET_ID con el ID de tu hoja de Google.');
+}
+
+/**
+ * Busca la pestaña sin distinguir mayúsculas. Si existe pero tiene el formato de una versión
+ * anterior de la app (primera columna distinta), la renombra a «<nombre>_anterior» para no
+ * mezclar datos ni perderlos, y crea una pestaña nueva.
+ */
+function getSheet_(ss, name, firstHeader) {
+  var found = null;
+  ss.getSheets().forEach(function (sh) {
+    if (!found && sh.getName().toLowerCase() === name.toLowerCase()) found = sh;
+  });
+  if (found) {
+    var lastCol = found.getLastColumn();
+    var first = lastCol > 0 ? String(found.getRange(1, 1).getValue()) : firstHeader;
+    if (first === firstHeader) return found;
+    var base = found.getName() + '_anterior';
+    var newName = base, n = 2;
+    while (ss.getSheetByName(newName)) { newName = base + n; n++; }
+    found.setName(newName);
   }
-  return sh;
+  return ss.insertSheet(name);
+}
+
+/** Devuelve el encabezado actual; agrega las columnas que falten. */
+function ensureHeaders_(sh, fixed, keys) {
+  var lastCol = sh.getLastColumn();
+  var header = [];
+  if (lastCol > 0) {
+    header = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+    if (header[0] !== fixed[0]) {
+      throw new Error('La pestaña «' + sh.getName() + '» tiene un formato anterior (su primera columna no es «' +
+        fixed[0] + '»). Bórrala o cámbiale el nombre y vuelve a enviar.');
+    }
+  } else {
+    header = fixed.slice();
+  }
+  var changed = lastCol === 0;
+  keys.forEach(function (k) {
+    if (header.indexOf(k) === -1) { header.push(k); changed = true; }
+  });
+  if (changed) {
+    if (sh.getMaxColumns() < header.length) {
+      sh.insertColumnsAfter(sh.getMaxColumns(), header.length - sh.getMaxColumns());
+    }
+    sh.getRange(1, 1, 1, header.length).setValues([header]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return header;
+}
+
+function colLetter_(n) {
+  var s = '';
+  while (n > 0) {
+    var m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+/**
+ * Escribe filas (objetos) al final de la pestaña.
+ * Los textos se guardan como TEXTO (formato «@»): así no se pierden ceros a la izquierda en
+ * teléfonos o claves, ni se interpretan fechas o fórmulas. Los números se guardan como números.
+ */
+function writeRows_(sh, fixed, rows) {
+  var keys = [];
+  rows.forEach(function (r) {
+    Object.keys(r).forEach(function (k) { if (keys.indexOf(k) === -1) keys.push(k); });
+  });
+  var header = ensureHeaders_(sh, fixed, keys);
+
+  var start = sh.getLastRow() + 1;
+  var needRows = start + rows.length - 1;
+  if (sh.getMaxRows() < needRows) {
+    sh.insertRowsAfter(sh.getMaxRows(), needRows - sh.getMaxRows());
+  }
+
+  var values = [];
+  var textCells = [];
+  rows.forEach(function (r, i) {
+    var line = header.map(function (h, c) {
+      var v = Object.prototype.hasOwnProperty.call(r, h) ? r[h] : '';
+      if (v === null || v === undefined) v = '';
+      if (typeof v === 'boolean') v = v ? 1 : 0;
+      if (typeof v === 'string' && v !== '') textCells.push(colLetter_(c + 1) + (start + i));
+      return v;
+    });
+    values.push(line);
+  });
+
+  if (textCells.length) sh.getRangeList(textCells).setNumberFormat('@');
+  sh.getRange(start, 1, values.length, header.length).setValues(values);
 }
 
 function idExists_(sh, id) {
@@ -126,11 +217,4 @@ function deleteRowsById_(sh, id) {
   for (var i = ids.length - 1; i >= 0; i--) {
     if (String(ids[i][0]) === String(id)) sh.deleteRow(i + 2);
   }
-}
-
-/** Neutraliza texto que Sheets interpretaría como fórmula (=, +, -, @). */
-function safe_(v) {
-  if (v === null || v === undefined) return '';
-  var s = String(v);
-  return /^[=+\-@]/.test(s) ? "'" + s : s;
 }
