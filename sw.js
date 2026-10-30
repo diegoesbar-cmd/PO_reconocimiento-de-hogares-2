@@ -1,13 +1,14 @@
 /* Service worker: precache de toda la app y respuesta desde caché.
  *
- * - Si cambias SOLO el cuestionario (cuestionario.js): no hay que tocar nada aquí. El navegador
+ * - Si cambias SOLO un cuestionario (cuestionario.js o clinica.js): no hay que tocar nada aquí. El navegador
  *   detecta que cuestionario.js cambió (se importa abajo) y actualiza la app solo.
  * - Si cambias el código de la app (app.js, styles.css, index.html): sube VERSION aquí
  *   y APP_VERSION en app.js. */
 self.window = self;
-importScripts('cuestionario.js');
-const VERSION = '2.0.0';
-const FORM = (self.CUESTIONARIO && self.CUESTIONARIO.meta && self.CUESTIONARIO.meta.version) || '0';
+importScripts('cuestionario.js', 'clinica.js');
+const VERSION = '2.1.0';
+const FORMS = self.CUESTIONARIOS || {};
+const FORM = Object.keys(FORMS).sort().map((k) => k + FORMS[k].meta.version).join('_') || '0';
 const CACHE = `hogares-${VERSION}-${FORM}`;
 
 const PRECACHE = [
@@ -15,6 +16,7 @@ const PRECACHE = [
   'index.html',
   'styles.css',
   'cuestionario.js',
+  'clinica.js',
   'app.js',
   'manifest.webmanifest',
   'icons/icon-192.png',

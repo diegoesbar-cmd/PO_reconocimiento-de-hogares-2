@@ -424,3 +424,13 @@ details.member[open] > summary { border-bottom: 1px solid var(--line-soft); }
   .card { padding: 14px; }
   .q { margin-bottom: 14px; }
 }
+
+/* Selector de instrumento */
+.formswitch { display: flex; gap: 6px; max-width: 880px; margin: 12px auto 0; padding: 0 16px; }
+.formswitch[hidden] { display: none; }
+.fs-btn {
+  flex: 1; min-height: 44px; padding: 8px 10px; font: inherit; font-weight: 600; font-size: .95rem;
+  color: var(--brand-dark); background: #fff; border: 1.5px solid var(--line, #cfd8d3); border-radius: 10px; cursor: pointer;
+}
+.fs-btn.is-active { background: var(--brand-faint); border-color: var(--brand); }
+.formtag { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 6px; margin-right: 4px; border-radius: 6px; background: var(--brand-faint); color: var(--brand-dark); }

@@ -1,13 +1,14 @@
 /**
- * Receptor de encuestas «Reconocimiento de Hogares» → Google Sheets  (v2, genérico).
+ * Receptor de encuestas «Reconocimiento de Hogares» → Google Sheets  (v2.1, genérico, varios instrumentos).
  *
  * Qué hace:
  *  - Exige un token (propiedad de script TOKEN) para aceptar datos.
  *  - Es idempotente: si la app reintenta un envío, no duplica filas (clave: _id).
  *  - NO depende de las preguntas del cuestionario: crea solo las columnas que falten.
  *    Por eso, al cambiar el cuestionario NO hay que tocar ni volver a publicar este script.
- *  - Escribe una pestaña «Hogares» (una fila por hogar) y una pestaña por cada bloque
- *    repetido del cuestionario (p. ej. «integrantes»: una fila por persona, ligada por _id_hogar).
+ *  - Escribe una pestaña por instrumento (la app indica el nombre: «Hogares», «Clinicas»…) con una
+ *    fila por encuesta, y una pestaña por cada bloque repetido (p. ej. «integrantes»: una fila por persona,
+ *    ligada por _id_hogar).
  *
  * Configuración (ver README.md):
  *  - Propiedad de script TOKEN (obligatoria): la clave que se comparte con el equipo.
@@ -15,7 +16,7 @@
  *    Extensiones > Apps Script): el ID de la hoja de cálculo de destino.
  */
 
-var VERSION = '2.0.0';
+var VERSION = '2.1.0';
 var SHEET_MAIN = 'Hogares';
 var FIXED_MAIN = ['_id', '_recibido_en', '_capturado_en', '_estado', '_version_app', '_version_cuestionario'];
 var FIXED_REP = ['_id_hogar', 'hogar_id', '_num'];
@@ -48,7 +49,7 @@ function doPost(e) {
     }
 
     var ss = openSpreadsheet_();
-    var shMain = getSheet_(ss, SHEET_MAIN, FIXED_MAIN[0]);
+    var shMain = getSheet_(ss, mainName_(s.hoja), FIXED_MAIN[0]);
 
     // Idempotencia: la fila de «Hogares» es la marca de que el envío quedó completo.
     if (idExists_(shMain, s.id)) {
@@ -64,7 +65,7 @@ function doPost(e) {
       deleteRowsById_(sh, s.id);
       if (!list.length) return;
       var rows = list.map(function (item, i) {
-        var r = { _id_hogar: s.id, hogar_id: s.answers.hogar_id || '', _num: i + 1 };
+        var r = { _id_hogar: s.id, hogar_id: s.answers[s.idCampo || 'hogar_id'] || s.answers.hogar_id || '', _num: i + 1 };
         Object.keys(item).forEach(function (k) { r[k] = item[k]; });
         return r;
       });
@@ -94,6 +95,12 @@ function doPost(e) {
 }
 
 // ---------------------------------------------------------------- utilidades
+
+/** Nombre de la pestaña principal que indica la app (solo letras, números, espacio y guion bajo). */
+function mainName_(name) {
+  var n = String(name || '').replace(/[^A-Za-z0-9 _\u00C0-\u017F]/g, '').trim().substring(0, 40);
+  return n || SHEET_MAIN;
+}
 
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))

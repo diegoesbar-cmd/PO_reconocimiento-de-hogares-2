@@ -4,25 +4,62 @@
   // ======================================================================
   //  Configuración
   // ======================================================================
-  const APP_VERSION = '2.0.0';
+  const APP_VERSION = '2.1.0';
   const MAX_REPEAT = 25;                       // máximo de registros por bloque repetido
   const DB_NAME = 'OfflineSurveysDB';
   const DB_VERSION = 2;
   const LS_URL = 'gas_survey_endpoint';
   const LS_TOKEN = 'gas_survey_token';
   const LS_REMEMBER = 'hogares_recordar';
+  const LS_FORM = 'hogares_instrumento';
 
-  // Nombres de campos del cuestionario que la app usa para comodidad (todos opcionales).
-  const ID_FIELD = 'hogar_id';                 // identificador del hogar (aviso de duplicados)
-  const DATE_FIELD = 'fecha_visita';           // se precarga con la fecha de hoy
-  const TIME_FIELD = 'hora_visita';            // se precarga con la hora actual
-  const REMEMBER = ['investigador', 'municipio', 'localidad']; // se recuerdan en este teléfono
-  const DECLARED = { integrantes: 'numero_integrantes' };      // bloque repetido -> campo con el total declarado
-  const SUMMARY_FIELDS = ['nombre_iniciales', 'parentesco', 'sexo', 'edad']; // resumen en cada tarjeta
+  // Instrumentos disponibles. Cada uno vive en su propio archivo .js generado desde un XLSForm
+  // y se registra en window.CUESTIONARIOS[clave]. Aquí solo se indica qué campos usa la app
+  // para comodidad (todos opcionales) y en qué pestaña de la hoja se guardan sus respuestas.
+  const FORM_CFG = {
+    hogares: {
+      corto: 'Hogar', nombre: 'Reconocimiento de hogares', hoja: 'Hogares',
+      idField: 'hogar_id',                       // identificador (aviso de duplicados)
+      dateField: 'fecha_visita',                 // se precarga con la fecha de hoy
+      timeField: 'hora_visita',                  // se precarga con la hora actual
+      remember: ['investigador', 'municipio', 'localidad'],   // se recuerdan en este teléfono
+      declared: { integrantes: 'numero_integrantes' },        // bloque repetido -> campo con el total declarado
+      summary: ['nombre_iniciales', 'parentesco', 'sexo', 'edad']  // resumen en cada tarjeta
+    },
+    clinica: {
+      corto: 'Clínica', nombre: 'Inventario de clínica', hoja: 'Clinicas',
+      idField: 'clinica_id', dateField: 'fecha_visita', timeField: 'hora_visita',
+      remember: ['investigador', 'municipio', 'localidad'], declared: {}, summary: []
+    }
+  };
+  const FORMS = window.CUESTIONARIOS || {};
   const URGENT_RE = /urgencia/i;               // las notas cuyo nombre coincide se muestran como alerta roja
-  const PREFILLED = [DATE_FIELD, TIME_FIELD].concat(REMEMBER);
 
-  const Q = window.CUESTIONARIO;
+  // Instrumento activo: ?f=clinica en la dirección > el último usado en este teléfono > hogares
+  function pickForm() {
+    let k = '';
+    try { k = new URLSearchParams(location.search).get('f') || ''; } catch (_) { /* nada */ }
+    if (!FORMS[k]) k = lsGet(LS_FORM);
+    if (!FORMS[k]) k = FORMS.hogares ? 'hogares' : Object.keys(FORMS)[0];
+    return k;
+  }
+  const FORM_KEY = pickForm();
+  const C = FORM_CFG[FORM_KEY] || FORM_CFG.hogares;
+  const ID_FIELD = C.idField;
+  const DATE_FIELD = C.dateField;
+  const TIME_FIELD = C.timeField;
+  const REMEMBER = C.remember;
+  const DECLARED = C.declared;
+  const SUMMARY_FIELDS = C.summary;
+  const PREFILLED = [DATE_FIELD, TIME_FIELD].concat(REMEMBER);
+  const DRAFT_KEY = FORM_KEY === 'hogares' ? 'draft' : 'draft_' + FORM_KEY;   // un borrador por instrumento
+
+  // formId (guardado en cada encuesta) -> configuración de su instrumento
+  const BY_FORMID = {};
+  Object.keys(FORMS).forEach((k) => { BY_FORMID[FORMS[k].meta.formId] = Object.assign({ key: k }, FORM_CFG[k] || {}); });
+  function cfgOf(rec) { return (rec && BY_FORMID[rec.formId]) || Object.assign({ key: 'hogares' }, FORM_CFG.hogares); }
+
+  const Q = FORMS[FORM_KEY];
   const $ = (id) => document.getElementById(id);
 
   // ======================================================================
@@ -909,7 +946,7 @@
       buildAll();
       lastTabsKey = '';
       showStep(0, false);
-      try { await deleteMeta('draft'); } catch (_) { /* no crítico */ }
+      try { await deleteMeta(DRAFT_KEY); } catch (_) { /* no crítico */ }
     } finally {
       suspendDraft = false;
     }
@@ -1005,7 +1042,7 @@
     if (suspendDraft) return;
     try {
       await putMeta({
-        key: 'draft', v: 2, formVersion: Q.meta.version, step: state.step,
+        key: DRAFT_KEY, v: 2, formVersion: Q.meta.version, step: state.step,
         answers: state.answers, reps: state.reps, nextUid: state.nextUid, savedAt: Date.now()
       });
     } catch (e) { console.warn('No se pudo guardar el borrador', e); }
@@ -1021,7 +1058,7 @@
 
   async function restoreDraft() {
     let d;
-    try { d = await getMeta('draft'); } catch (_) { return; }
+    try { d = await getMeta(DRAFT_KEY); } catch (_) { return; }
     if (!draftHasContent(d)) return;
     state.answers = d.answers;
     state.reps = {};
@@ -1052,7 +1089,9 @@
   }
 
   function toPayload(s) {
+    const c = cfgOf(s);
     return {
+      hoja: c.hoja, idCampo: c.idField,
       id: s.id, timestamp: s.timestamp, appVersion: s.appVersion, formId: s.formId,
       formVersion: s.formVersion, estado: s.estado, answers: s.answers, repeats: s.repeats
     };
@@ -1143,7 +1182,7 @@
     } catch (e) { console.warn(e); }
   }
 
-  function surveyLabel(s) { return s.answers ? (s.answers[ID_FIELD] || '(sin ID)') : (s.folio || '(formato anterior)'); }
+  function surveyLabel(s) { return s.answers ? (s.answers[cfgOf(s).idField] || '(sin ID)') : (s.folio || '(formato anterior)'); }
 
   async function renderSurveyTable() {
     const tbody = $('surveyTableBody');
@@ -1161,8 +1200,9 @@
       else if (s.synced) st = '<span class="state sent">Enviada</span>';
       else if (s.estado === 'incompleta') st = '<span class="state inc">Incompleta · pendiente</span>';
       else st = '<span class="state pend">Pendiente</span>';
-      const fecha = s.answers ? (s.answers[DATE_FIELD] || '') : (s.fecha || '');
-      return `<tr><td><strong>${esc(surveyLabel(s))}</strong></td><td>${esc(fecha)}</td><td>${esc(nrep)}</td><td>${st}</td>` +
+      const fecha = s.answers ? (s.answers[cfgOf(s).dateField] || '') : (s.fecha || '');
+      const tipo = s.answers ? `<small class="formtag">${esc(cfgOf(s).corto)}</small> ` : '';
+      return `<tr><td>${tipo}<strong>${esc(surveyLabel(s))}</strong></td><td>${esc(fecha)}</td><td>${esc(nrep)}</td><td>${st}</td>` +
         `<td><button type="button" class="btn btn-danger" data-action="delete" data-id="${esc(s.id)}">Borrar</button></td></tr>`;
     }).join('');
   }
@@ -1215,28 +1255,47 @@
     const stamp = todayLocal();
 
     if (kind === 'json') {
-      downloadFile(JSON.stringify(data, null, 2), `Respaldo_Hogares_${stamp}.json`, 'application/json');
+      downloadFile(JSON.stringify(data, null, 2), `Respaldo_Encuestas_${stamp}.json`, 'application/json');
       return;
     }
     const nuevos = data.filter((s) => s.answers);
     if (!nuevos.length) { toast('Solo hay encuestas en formato anterior: usa «Respaldo JSON».', 'err'); return; }
 
-    if (kind === 'hogares') {
-      const keys = [Q.meta.inicio, Q.meta.fin].filter(Boolean).concat(topFlat.map((q) => q.name));
-      const headers = ['_id', '_estado', '_capturado_en', '_enviado'].concat(keys);
-      const rows = nuevos.map((s) => [s.id, s.estado, s.timestamp, s.synced ? 'si' : 'no'].concat(keys.map((k) => s.answers[k])));
-      downloadFile(toCSV(headers, rows), `Hogares_${stamp}.csv`, 'text/csv;charset=utf-8');
-    } else {
-      repDefs.forEach((rep) => {
-        const keys = repFlat[rep.name].map((q) => q.name);
-        const headers = ['_id_hogar', ID_FIELD, '_num'].concat(keys);
-        const rows = [];
-        nuevos.forEach((s) => ((s.repeats && s.repeats[rep.name]) || []).forEach((m, i) => {
-          rows.push([s.id, s.answers[ID_FIELD], i + 1].concat(keys.map((k) => m[k])));
-        }));
-        downloadFile(toCSV(headers, rows), `${rep.name}_${stamp}.csv`, 'text/csv;charset=utf-8');
-      });
-    }
+    // Una lista de columnas por instrumento (las preguntas fuera y dentro de bloques repetidos)
+    const forms = Object.keys(FORMS).map((k) => {
+      const f = FORMS[k], top = [], reps = [];
+      (function walk(items, r) {
+        items.forEach((q) => {
+          if (q.type === 'group') { walk(q.items, r); return; }
+          if (q.type === 'repeat') { const nr = { name: q.name, keys: [] }; reps.push(nr); walk(q.items, nr); return; }
+          if (q.type === 'note') return;
+          (r ? r.keys : top).push(q.name);
+        });
+      })(f.pasos.reduce((a, p) => a.concat(p.items), []), null);
+      return { key: k, f, top, reps, c: FORM_CFG[k] || FORM_CFG.hogares };
+    });
+
+    let n = 0;
+    forms.forEach((F) => {
+      const mine = nuevos.filter((x) => x.formId === F.f.meta.formId);
+      if (!mine.length) return;
+      if (kind === 'hogares') {
+        const keys = [F.f.meta.inicio, F.f.meta.fin].filter(Boolean).concat(F.top);
+        const headers = ['_id', '_estado', '_capturado_en', '_enviado'].concat(keys);
+        const rows = mine.map((x) => [x.id, x.estado, x.timestamp, x.synced ? 'si' : 'no'].concat(keys.map((k) => x.answers[k])));
+        downloadFile(toCSV(headers, rows), `${F.c.hoja}_${stamp}.csv`, 'text/csv;charset=utf-8'); n++;
+      } else {
+        F.reps.forEach((r) => {
+          const headers = ['_id_hogar', F.c.idField, '_num'].concat(r.keys);
+          const rows = [];
+          mine.forEach((x) => ((x.repeats && x.repeats[r.name]) || []).forEach((m, i) => {
+            rows.push([x.id, x.answers[F.c.idField], i + 1].concat(r.keys.map((k) => m[k])));
+          }));
+          downloadFile(toCSV(headers, rows), `${r.name}_${stamp}.csv`, 'text/csv;charset=utf-8'); n++;
+        });
+      }
+    });
+    if (!n) toast('No hay datos de ese tipo para exportar.', 'err');
   }
 
   // ======================================================================
@@ -1372,6 +1431,29 @@
     window.addEventListener('pageshow', () => { ensureDB().catch(() => {}); });
   }
 
+  // Selector de instrumento (solo aparece si hay más de uno). Cada uno conserva su propio borrador.
+  function buildFormSwitch() {
+    const keys = Object.keys(FORMS);
+    const nav = $('formSwitch');
+    if (keys.length < 2) { nav.hidden = true; return; }
+    nav.hidden = false;
+    nav.innerHTML = '';
+    keys.forEach((k) => {
+      const b = el('button', 'fs-btn' + (k === FORM_KEY ? ' is-active' : ''), (FORM_CFG[k] && FORM_CFG[k].nombre) || FORMS[k].meta.titulo);
+      b.type = 'button';
+      b.dataset.form = k;
+      b.setAttribute('aria-pressed', k === FORM_KEY ? 'true' : 'false');
+      nav.appendChild(b);
+    });
+    nav.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-form]');
+      if (!b || b.dataset.form === FORM_KEY) return;
+      try { await saveDraft(); } catch (_) { /* el borrador es opcional */ }
+      lsSet(LS_FORM, b.dataset.form);
+      location.replace(location.pathname);
+    });
+  }
+
   async function init() {
     $('appVersion').textContent = APP_VERSION;
     if (!Q) {
@@ -1381,6 +1463,9 @@
     }
     $('formVersion').textContent = Q.meta.version;
     $('formTitle').textContent = Q.meta.titulo;
+    $('appName').textContent = C.nombre || Q.meta.titulo;
+    document.title = C.nombre || document.title;
+    buildFormSwitch();
     loadConfig();
     bindEvents();
 

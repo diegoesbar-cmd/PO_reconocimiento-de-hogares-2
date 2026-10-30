@@ -4,7 +4,10 @@ Convierte un XLSForm (hojas survey / choices / settings) en cuestionario.js,
 el archivo que la app lee para dibujar el cuestionario.
 
 Uso:
-    python3 herramientas/convertir_xlsform.py herramientas/cuestionario.xlsx cuestionario.js
+    python3 herramientas/convertir_xlsform.py herramientas/cuestionario.xlsx cuestionario.js hogares
+    python3 herramientas/convertir_xlsform.py herramientas/clinica.xlsx clinica.js clinica
+
+El tercer dato es la clave del instrumento (hogares, clinica…): la app lo registra con ese nombre.
 
 Requiere:  pip install openpyxl
 
@@ -64,7 +67,7 @@ def leer_hoja(wb, nombre):
     return out
 
 
-def main(origen, destino):
+def main(origen, destino, clave):
     wb = openpyxl.load_workbook(origen, data_only=True)
     survey = leer_hoja(wb, "survey")
     choices = leer_hoja(wb, "choices")
@@ -222,6 +225,7 @@ def main(origen, destino):
     salida = {
         "meta": {
             "titulo": txt(cfg.get("form_title")) or "Cuestionario",
+            "clave": clave,
             "formId": txt(cfg.get("form_id")) or "cuestionario",
             "version": txt(cfg.get("version")) or "1",
             "inicio": meta_auto["start"],
@@ -238,7 +242,7 @@ def main(origen, destino):
     )
     js = (
         "/* GENERADO por herramientas/convertir_xlsform.py a partir del XLSForm. No editar a mano. */\n"
-        "window.CUESTIONARIO = " + cuerpo + ";\n"
+        "(window.CUESTIONARIOS = window.CUESTIONARIOS || {})[" + json.dumps(clave) + "] = " + cuerpo + ";\n"
     )
     for a in avisos:
         print("AVISO:", a)
@@ -265,7 +269,7 @@ def main(origen, destino):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 4:
         print(__doc__)
         sys.exit(2)
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], sys.argv[3])

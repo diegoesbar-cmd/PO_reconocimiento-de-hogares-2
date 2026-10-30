@@ -1,7 +1,8 @@
 /* GENERADO por herramientas/convertir_xlsform.py a partir del XLSForm. No editar a mano. */
-window.CUESTIONARIO = {
+(window.CUESTIONARIOS = window.CUESTIONARIOS || {})["hogares"] = {
  "meta": {
   "titulo": "Reconocimiento de hogares: DM2, HTA y diabetes gestacional",
+  "clave": "hogares",
   "formId": "tamiz_hogares_dm2_hta_dg",
   "version": "2026.07.17",
   "inicio": "inicio",

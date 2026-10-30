@@ -1,7 +1,7 @@
 {
-  "name": "Reconocimiento de Hogares",
-  "short_name": "Hogares",
-  "description": "Cuestionario de campo para reconocimiento de hogares, con captura sin conexión.",
+  "name": "Levantamientos de campo",
+  "short_name": "Campo",
+  "description": "Reconocimiento de hogares e inventario de clínicas, con captura sin conexión.",
   "lang": "es",
   "start_url": "./index.html",
   "scope": "./",
