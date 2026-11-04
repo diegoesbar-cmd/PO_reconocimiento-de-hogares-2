@@ -4,7 +4,7 @@
   "titulo": "Inventario de clínica: equipamiento y medicamentos",
   "clave": "clinica",
   "formId": "inventario_clinica",
-  "version": "2026.10.29",
+  "version": "2026.11.04",
   "inicio": "inicio",
   "fin": "fin"
  },
@@ -471,6 +471,376 @@
      "relevant": "${cur_rpbi} = 'existe_no_opera' or ${cur_rpbi} = 'no_existe'"
     }
    ]
+  },
+  {
+   "id": "meds_hd",
+   "titulo": "Medicamentos para HTA y DM2",
+   "items": [
+    {
+     "name": "g_hd01",
+     "type": "group",
+     "label": "1. Amlodipino",
+     "items": [
+      {
+       "name": "hd01_cantidad",
+       "type": "integer",
+       "label": "Cantidad de cajas/unidades",
+       "hint": "Escribe 0 si no hay.",
+       "required": true,
+       "constraint": ". >= 0 and . <= 9999",
+       "constraintMsg": "Escribe un número entre 0 y 9999."
+      },
+      {
+       "name": "hd01_caducado",
+       "type": "decimal",
+       "label": "% caducado",
+       "hint": "Porcentaje de lo existente que está caducado (0 a 100).",
+       "required": true,
+       "relevant": "${hd01_cantidad} > 0",
+       "constraint": ". >= 0 and . <= 100",
+       "constraintMsg": "Escribe un porcentaje entre 0 y 100."
+      },
+      {
+       "name": "hd01_obs",
+       "type": "text",
+       "label": "Presentación y observaciones",
+       "hint": "Anota la presentación (por ejemplo, 5 mg o 850 mg).",
+       "relevant": "${hd01_cantidad} >= 0"
+      }
+     ]
+    },
+    {
+     "name": "g_hd02",
+     "type": "group",
+     "label": "2. Felodipino",
+     "items": [
+      {
+       "name": "hd02_cantidad",
+       "type": "integer",
+       "label": "Cantidad de cajas/unidades",
+       "hint": "Escribe 0 si no hay.",
+       "required": true,
+       "constraint": ". >= 0 and . <= 9999",
+       "constraintMsg": "Escribe un número entre 0 y 9999."
+      },
+      {
+       "name": "hd02_caducado",
+       "type": "decimal",
+       "label": "% caducado",
+       "hint": "Porcentaje de lo existente que está caducado (0 a 100).",
+       "required": true,
+       "relevant": "${hd02_cantidad} > 0",
+       "constraint": ". >= 0 and . <= 100",
+       "constraintMsg": "Escribe un porcentaje entre 0 y 100."
+      },
+      {
+       "name": "hd02_obs",
+       "type": "text",
+       "label": "Presentación y observaciones",
+       "hint": "Anota la presentación (por ejemplo, 5 mg o 850 mg).",
+       "relevant": "${hd02_cantidad} >= 0"
+      }
+     ]
+    },
+    {
+     "name": "g_hd03",
+     "type": "group",
+     "label": "3. Enalapril",
+     "items": [
+      {
+       "name": "hd03_cantidad",
+       "type": "integer",
+       "label": "Cantidad de cajas/unidades",
+       "hint": "Escribe 0 si no hay.",
+       "required": true,
+       "constraint": ". >= 0 and . <= 9999",
+       "constraintMsg": "Escribe un número entre 0 y 9999."
+      },
+      {
+       "name": "hd03_caducado",
+       "type": "decimal",
+       "label": "% caducado",
+       "hint": "Porcentaje de lo existente que está caducado (0 a 100).",
+       "required": true,
+       "relevant": "${hd03_cantidad} > 0",
+       "constraint": ". >= 0 and . <= 100",
+       "constraintMsg": "Escribe un porcentaje entre 0 y 100."
+      },
+      {
+       "name": "hd03_obs",
+       "type": "text",
+       "label": "Presentación y observaciones",
+       "hint": "Anota la presentación (por ejemplo, 5 mg o 850 mg).",
+       "relevant": "${hd03_cantidad} >= 0"
+      }
+     ]
+    },
+    {
+     "name": "g_hd04",
+     "type": "group",
+     "label": "4. Lisinopril",
+     "items": [
+      {
+       "name": "hd04_cantidad",
+       "type": "integer",
+       "label": "Cantidad de cajas/unidades",
+       "hint": "Escribe 0 si no hay.",
+       "required": true,
+       "constraint": ". >= 0 and . <= 9999",
+       "constraintMsg": "Escribe un número entre 0 y 9999."
+      },
+      {
+       "name": "hd04_caducado",
+       "type": "decimal",
+       "label": "% caducado",
+       "hint": "Porcentaje de lo existente que está caducado (0 a 100).",
+       "required": true,
+       "relevant": "${hd04_cantidad} > 0",
+       "constraint": ". >= 0 and . <= 100",
+       "constraintMsg": "Escribe un porcentaje entre 0 y 100."
+      },
+      {
+       "name": "hd04_obs",
+       "type": "text",
+       "label": "Presentación y observaciones",
+       "hint": "Anota la presentación (por ejemplo, 5 mg o 850 mg).",
+       "relevant": "${hd04_cantidad} >= 0"
+      }
+     ]
+    },
+    {
+     "name": "g_hd05",
+     "type": "group",
+     "label": "5. Ramipril",
+     "items": [
+      {
+       "name": "hd05_cantidad",
+       "type": "integer",
+       "label": "Cantidad de cajas/unidades",
+       "hint": "Escribe 0 si no hay.",
+       "required": true,
+       "constraint": ". >= 0 and . <= 9999",
+       "constraintMsg": "Escribe un número entre 0 y 9999."
+      },
+      {
+       "name": "hd05_caducado",
+       "type": "decimal",
+       "label": "% caducado",
+       "hint": "Porcentaje de lo existente que está caducado (0 a 100).",
+       "required": true,
+       "relevant": "${hd05_cantidad} > 0",
+       "constraint": ". >= 0 and . <= 100",
+       "constraintMsg": "Escribe un porcentaje entre 0 y 100."
+      },
+      {
+       "name": "hd05_obs",
+       "type": "text",
+       "label": "Presentación y observaciones",
+       "hint": "Anota la presentación (por ejemplo, 5 mg o 850 mg).",
+       "relevant": "${hd05_cantidad} >= 0"
+      }
+     ]
+    },
+    {
+     "name": "g_hd06",
+     "type": "group",
+     "label": "6. Valsartán",
+     "items": [
+      {
+       "name": "hd06_cantidad",
+       "type": "integer",
+       "label": "Cantidad de cajas/unidades",
+       "hint": "Escribe 0 si no hay.",
+       "required": true,
+       "constraint": ". >= 0 and . <= 9999",
+       "constraintMsg": "Escribe un número entre 0 y 9999."
+      },
+      {
+       "name": "hd06_caducado",
+       "type": "decimal",
+       "label": "% caducado",
+       "hint": "Porcentaje de lo existente que está caducado (0 a 100).",
+       "required": true,
+       "relevant": "${hd06_cantidad} > 0",
+       "constraint": ". >= 0 and . <= 100",
+       "constraintMsg": "Escribe un porcentaje entre 0 y 100."
+      },
+      {
+       "name": "hd06_obs",
+       "type": "text",
+       "label": "Presentación y observaciones",
+       "hint": "Anota la presentación (por ejemplo, 5 mg o 850 mg).",
+       "relevant": "${hd06_cantidad} >= 0"
+      }
+     ]
+    },
+    {
+     "name": "g_hd07",
+     "type": "group",
+     "label": "7. Irbesartán",
+     "items": [
+      {
+       "name": "hd07_cantidad",
+       "type": "integer",
+       "label": "Cantidad de cajas/unidades",
+       "hint": "Escribe 0 si no hay.",
+       "required": true,
+       "constraint": ". >= 0 and . <= 9999",
+       "constraintMsg": "Escribe un número entre 0 y 9999."
+      },
+      {
+       "name": "hd07_caducado",
+       "type": "decimal",
+       "label": "% caducado",
+       "hint": "Porcentaje de lo existente que está caducado (0 a 100).",
+       "required": true,
+       "relevant": "${hd07_cantidad} > 0",
+       "constraint": ". >= 0 and . <= 100",
+       "constraintMsg": "Escribe un porcentaje entre 0 y 100."
+      },
+      {
+       "name": "hd07_obs",
+       "type": "text",
+       "label": "Presentación y observaciones",
+       "hint": "Anota la presentación (por ejemplo, 5 mg o 850 mg).",
+       "relevant": "${hd07_cantidad} >= 0"
+      }
+     ]
+    },
+    {
+     "name": "g_hd08",
+     "type": "group",
+     "label": "8. Telmisartán",
+     "items": [
+      {
+       "name": "hd08_cantidad",
+       "type": "integer",
+       "label": "Cantidad de cajas/unidades",
+       "hint": "Escribe 0 si no hay.",
+       "required": true,
+       "constraint": ". >= 0 and . <= 9999",
+       "constraintMsg": "Escribe un número entre 0 y 9999."
+      },
+      {
+       "name": "hd08_caducado",
+       "type": "decimal",
+       "label": "% caducado",
+       "hint": "Porcentaje de lo existente que está caducado (0 a 100).",
+       "required": true,
+       "relevant": "${hd08_cantidad} > 0",
+       "constraint": ". >= 0 and . <= 100",
+       "constraintMsg": "Escribe un porcentaje entre 0 y 100."
+      },
+      {
+       "name": "hd08_obs",
+       "type": "text",
+       "label": "Presentación y observaciones",
+       "hint": "Anota la presentación (por ejemplo, 5 mg o 850 mg).",
+       "relevant": "${hd08_cantidad} >= 0"
+      }
+     ]
+    },
+    {
+     "name": "g_hd09",
+     "type": "group",
+     "label": "9. Olmesartán",
+     "items": [
+      {
+       "name": "hd09_cantidad",
+       "type": "integer",
+       "label": "Cantidad de cajas/unidades",
+       "hint": "Escribe 0 si no hay.",
+       "required": true,
+       "constraint": ". >= 0 and . <= 9999",
+       "constraintMsg": "Escribe un número entre 0 y 9999."
+      },
+      {
+       "name": "hd09_caducado",
+       "type": "decimal",
+       "label": "% caducado",
+       "hint": "Porcentaje de lo existente que está caducado (0 a 100).",
+       "required": true,
+       "relevant": "${hd09_cantidad} > 0",
+       "constraint": ". >= 0 and . <= 100",
+       "constraintMsg": "Escribe un porcentaje entre 0 y 100."
+      },
+      {
+       "name": "hd09_obs",
+       "type": "text",
+       "label": "Presentación y observaciones",
+       "hint": "Anota la presentación (por ejemplo, 5 mg o 850 mg).",
+       "relevant": "${hd09_cantidad} >= 0"
+      }
+     ]
+    },
+    {
+     "name": "g_hd10",
+     "type": "group",
+     "label": "10. Metformina",
+     "items": [
+      {
+       "name": "hd10_cantidad",
+       "type": "integer",
+       "label": "Cantidad de cajas/unidades",
+       "hint": "Escribe 0 si no hay.",
+       "required": true,
+       "constraint": ". >= 0 and . <= 9999",
+       "constraintMsg": "Escribe un número entre 0 y 9999."
+      },
+      {
+       "name": "hd10_caducado",
+       "type": "decimal",
+       "label": "% caducado",
+       "hint": "Porcentaje de lo existente que está caducado (0 a 100).",
+       "required": true,
+       "relevant": "${hd10_cantidad} > 0",
+       "constraint": ". >= 0 and . <= 100",
+       "constraintMsg": "Escribe un porcentaje entre 0 y 100."
+      },
+      {
+       "name": "hd10_obs",
+       "type": "text",
+       "label": "Presentación y observaciones",
+       "hint": "Anota la presentación (por ejemplo, 5 mg o 850 mg).",
+       "relevant": "${hd10_cantidad} >= 0"
+      }
+     ]
+    },
+    {
+     "name": "g_hd11",
+     "type": "group",
+     "label": "11. Sulfonilurea (anota cuál en observaciones)",
+     "items": [
+      {
+       "name": "hd11_cantidad",
+       "type": "integer",
+       "label": "Cantidad de cajas/unidades",
+       "hint": "Escribe 0 si no hay.",
+       "required": true,
+       "constraint": ". >= 0 and . <= 9999",
+       "constraintMsg": "Escribe un número entre 0 y 9999."
+      },
+      {
+       "name": "hd11_caducado",
+       "type": "decimal",
+       "label": "% caducado",
+       "hint": "Porcentaje de lo existente que está caducado (0 a 100).",
+       "required": true,
+       "relevant": "${hd11_cantidad} > 0",
+       "constraint": ". >= 0 and . <= 100",
+       "constraintMsg": "Escribe un porcentaje entre 0 y 100."
+      },
+      {
+       "name": "hd11_obs",
+       "type": "text",
+       "label": "Presentación y observaciones",
+       "hint": "Anota la presentación (por ejemplo, 5 mg o 850 mg).",
+       "relevant": "${hd11_cantidad} >= 0"
+      }
+     ]
+    }
+   ],
+   "hint": "Medicamentos que se usan para tratar hipertensión arterial y diabetes tipo 2. Anota la presentación en observaciones."
   },
   {
    "id": "meds1",
