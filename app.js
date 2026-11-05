@@ -4,7 +4,7 @@
   // ======================================================================
   //  Configuración
   // ======================================================================
-  const APP_VERSION = '2.1.1';
+  const APP_VERSION = '2.1.2';
   const MAX_REPEAT = 25;                       // máximo de registros por bloque repetido
   const DB_NAME = 'OfflineSurveysDB';
   const DB_VERSION = 2;
@@ -1327,15 +1327,27 @@
     const url = $('cfgUrl').value.trim();
     if (!url) { setLog('cfgLog', 'Escribe primero la URL.', 'err'); return; }
     if (!navigator.onLine) { setLog('cfgLog', 'Sin conexión: no se puede probar ahora.', 'err'); return; }
-    setLog('cfgLog', 'Probando conexión…');
-    try {
-      const resp = await fetch(url + (url.includes('?') ? '&' : '?') + 'ping=1', { redirect: 'follow' });
-      const j = JSON.parse(await resp.text());
-      if (j && j.status === 'ok') setLog('cfgLog', `Conexión correcta (script v${j.version || '?'}).`, 'ok');
-      else setLog('cfgLog', 'El servidor respondió, pero no con el formato esperado.', 'err');
-    } catch (e) {
-      setLog('cfgLog', 'No se pudo conectar. Revisa la URL y que el acceso sea «Cualquier persona».', 'err');
+    // La dirección correcta termina en /exec (la que termina en /dev o la del editor no sirven)
+    if (!/^https:\/\/script\.google\.com\/(a\/[^/]+\/)?macros\/s\/[^/]+\/exec\/?$/.test(url)) {
+      setLog('cfgLog', 'La URL no parece la de una app web de Apps Script. Debe empezar con https://script.google.com/macros/s/ y terminar en /exec (cópiala de Implementar → Administrar implementaciones).', 'err');
+      return;
     }
+    setLog('cfgLog', 'Probando conexión…');
+    let texto = '';
+    try {
+      const resp = await fetch(url.replace(/\/$/, '') + '?ping=1', { redirect: 'follow' });
+      texto = await resp.text();
+      if (!resp.ok) { setLog('cfgLog', `El servidor respondió con error ${resp.status}. Revisa que la implementación exista y tenga acceso para «Cualquier persona».`, 'err'); return; }
+    } catch (e) {
+      setLog('cfgLog', `No se pudo conectar (${e && e.name ? e.name : 'error'}: ${e && e.message ? e.message : 'sin detalle'}). Revisa tu internet, bloqueadores de contenido o extensiones del navegador, y que la implementación tenga acceso para «Cualquier persona».`, 'err');
+      return;
+    }
+    let j = null;
+    try { j = JSON.parse(texto); } catch (_) { /* no es JSON */ }
+    if (j && j.status === 'ok') setLog('cfgLog', `Conexión correcta (script v${j.version || '?'}).`, 'ok');
+    else if (j) setLog('cfgLog', 'El script respondió, pero no con el formato esperado.', 'err');
+    else if (/<html|<!doctype/i.test(texto)) setLog('cfgLog', 'Google devolvió una página en lugar del script (normalmente la de iniciar sesión). Cambia el acceso de la implementación a «Cualquier persona» y crea una nueva versión.', 'err');
+    else setLog('cfgLog', 'Respuesta inesperada del servidor: ' + texto.slice(0, 80), 'err');
   }
 
   // ======================================================================
