@@ -4,7 +4,7 @@
   // ======================================================================
   //  Configuración
   // ======================================================================
-  const APP_VERSION = '2.1.0';
+  const APP_VERSION = '2.1.1';
   const MAX_REPEAT = 25;                       // máximo de registros por bloque repetido
   const DB_NAME = 'OfflineSurveysDB';
   const DB_VERSION = 2;
@@ -1365,11 +1365,37 @@
         : '⚠ Abre la app desde una dirección HTTPS para habilitar el modo sin conexión');
       return;
     }
+    const isOk = () => e.classList.contains('ok');
+    // Si la instalación no termina, revisa qué archivo no se pudo descargar y lo dice en pantalla
+    let diagnosing = false;
+    const diagnose = () => {
+      if (isOk() || diagnosing) return;
+      if (navigator.onLine === false) { warn('⚠ Sin internet: abre la app con conexión para dejarla lista'); return; }
+      diagnosing = true;
+      Promise.all(OFFLINE_FILES.map((f) => fetch(f, { cache: 'no-store' })
+        .then((r) => (r.ok ? '' : `${f} (${r.status})`))
+        .catch(() => `${f} (sin respuesta)`)))
+        .then((bad) => {
+          if (isOk()) return;
+          bad = bad.filter(Boolean);
+          warn(bad.length ? '⚠ Instalación incompleta. Falta en el servidor: ' + bad.join(', ')
+            : '⚠ La instalación sin conexión no terminó. Cierra la app y ábrela de nuevo con internet');
+        })
+        .finally(() => { diagnosing = false; });
+    };
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
-      .then(() => navigator.serviceWorker.ready)
+      .then((reg) => {
+        const w = reg.installing || reg.waiting;
+        if (w) w.addEventListener('statechange', () => { if (w.state === 'redundant') diagnose(); });
+        setTimeout(diagnose, window.SW_WAIT_MS || 15000);
+        return navigator.serviceWorker.ready;
+      })
       .then(() => { e.textContent = '✓ Lista para usarse sin conexión'; e.className = 'offline-state ok'; })
-      .catch((err) => { console.warn(err); warn('⚠ No se pudo activar el modo sin conexión'); });
+      .catch((err) => { console.warn(err); warn('⚠ No se pudo activar el modo sin conexión'); diagnose(); });
   }
+  // Archivos que debe tener el servidor para que la app funcione sin conexión (los mismos que guarda sw.js)
+  const OFFLINE_FILES = ['index.html', 'styles.css', 'app.js', 'cuestionario.js', 'clinica.js', 'sw.js',
+    'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
   // ======================================================================
   //  Arranque

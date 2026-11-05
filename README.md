@@ -82,6 +82,7 @@ No soportados: `choice_filter`, `repeat_count`, `jr:`, imágenes/audio, otros id
 - Una visita por clínica. Pide ID de la clínica (CLUES o clave corta), nombre, municipio, localidad, fecha e investigador, y después:
   infraestructura y mobiliario (A, B), equipo de diagnóstico (C), instrumental y material de curación (D, E) y los 27 medicamentos del Apéndice A de la NOM-005-SSA3-2010.
 - Cada reactivo de equipamiento se responde con *Existe y opera / Existe pero no opera / No existe*; las observaciones aparecen solo si no existe o no opera. El negatoscopio tiene una cuarta opción, *No aplica*.
+- Antes de los 27 va la pantalla «Medicamentos para HTA y DM2» (amlodipino, felodipino, enalapril, lisinopril, ramipril, valsartán, irbesartán, telmisartán, olmesartán, metformina y sulfonilurea). La presentación se anota en observaciones.
 - Cada medicamento pide cantidad de cajas/unidades (0 si no hay); si hay, pide el % caducado (0 a 100) y deja observaciones.
 - Para agregar un tercer instrumento: crea su XLSForm, conviértelo con una clave nueva, agrega su bloque en `FORM_CFG` (`app.js`), su `<script>` en `index.html` y su archivo en `sw.js`.
 
