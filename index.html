@@ -40,6 +40,12 @@
 
   <main class="container">
 
+    <!-- Aviso: se está retomando una encuesta incompleta -->
+    <div id="resumeBanner" class="resume-banner" role="status" hidden>
+      <span id="resumeText"></span>
+      <button type="button" class="linkbtn" id="btnResumeDiscard">Descartar cambios</button>
+    </div>
+
     <!-- Progreso -->
     <section class="card progress" aria-label="Progreso">
       <div class="progress-head">
@@ -56,6 +62,7 @@
       <div class="nav">
         <button type="button" class="btn btn-ghost" id="btnPrev" hidden>← Anterior</button>
         <div class="nav-right">
+          <button type="button" class="btn btn-soft" id="btnPause" title="Ir a la revisión sin completar esta sección, para guardar como incompleta">Pausar</button>
           <button type="button" class="btn btn-primary" id="btnNext">Siguiente →</button>
         </div>
       </div>

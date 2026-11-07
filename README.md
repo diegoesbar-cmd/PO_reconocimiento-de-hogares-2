@@ -1,4 +1,4 @@
-# Levantamientos de campo · captura sin conexión (v2.1)
+# Levantamientos de campo · captura sin conexión (v2.2)
 
 Cuestionario de campo que funciona **sin internet** una vez cargado una vez con conexión.
 Guarda cada encuesta en el teléfono y la envía a Google Sheets cuando hay señal.
@@ -39,13 +39,15 @@ El modo sin conexión requiere HTTPS (GitHub Pages ya lo tiene).
      (Extensiones → Apps Script). El ID es el texto largo de la URL de la hoja entre `/d/` y `/edit`.
 3. **Implementar → Administrar implementaciones → lápiz → Versión: Nueva versión → Implementar.**
    La URL no cambia, así que los teléfonos ya configurados siguen funcionando.
-4. En la app: **Configurar envío → Probar conexión** debe decir «Conexión correcta (script v2.1.0)».
+4. En la app: **Configurar envío → Probar conexión** debe decir «Conexión correcta (script v2.2.0)».
 
-El script nuevo también acepta a las apps v2.0.0 que ya estén en los teléfonos, así que conviene actualizarlo **antes** de subir la app a GitHub.
+**Orden de actualización a la v2.2 (retomar encuestas):** primero el script de Google (pasos 1–3) y **después** la app en GitHub.
+El script nuevo acepta las apps anteriores, pero una app v2.2 no da por enviada una encuesta retomada si el script sigue siendo anterior
+(la deja pendiente con el aviso «actualiza el script»), para que no se pierdan cambios.
 
 El script crea solo las pestañas y columnas:
 
-- **Hogares** y **Clinicas**: una fila por encuesta; una columna por pregunta, más `_id`, `_estado`, `_capturado_en`…
+- **Hogares** y **Clinicas**: una fila por encuesta; una columna por pregunta, más `_id`, `_estado`, `_capturado_en`, `_retomas`…
 - **integrantes** (una pestaña por bloque repetido): una fila por persona, ligada al hogar por `_id_hogar` y `hogar_id`.
 
 Si en la hoja había pestañas de la versión anterior, se renombran solas a `Hogares_anterior` e `Integrantes_anterior` (no se pierde nada).
@@ -93,8 +95,33 @@ No soportados: `choice_filter`, `repeat_count`, `jr:`, imágenes/audio, otros id
 - Las notas de **urgencia** salen en rojo, marcan la tarjeta de la persona y se repiten en la revisión final.
 - La revisión final avisa si el total de integrantes declarado no coincide con los registrados y lista lo que falta con un botón **Ir**.
 - **Guardar como incompleta** permite guardar una entrevista interrumpida; se marca `_estado = incompleta` en la hoja.
+- **Retomar una incompleta** (ver abajo) para volver al hogar cuando estén las personas que faltaban.
 - Si se cierra el navegador a media entrevista, se recupera el borrador.
 - La app recuerda investigador, municipio y localidad en ese teléfono para precargarlos.
+
+## Retomar una encuesta incompleta (v2.2)
+
+Cuando faltan personas del hogar (por ejemplo, quien tiene HTA o diabetes no estaba), la entrevista se **suspende** y se **retoma** al volver, sin capturar el hogar de nuevo.
+
+**Para el encuestador:**
+
+1. En el hogar, captura todo lo que se pueda. En el total de integrantes cuenta a **todas** las personas, también a las ausentes, y regístralas aunque solo tengas su nombre y parentesco.
+2. En **Observaciones de seguimiento** y **Mejor momento para volver**, anota quién falta y a qué hora localizarla.
+3. Pulsa **Pausar** (abajo, junto a «Siguiente»): lleva a la Revisión sin exigir completar la sección en la que estás. Ahí pulsa **Guardar como incompleta** y confirma.
+4. Puedes levantar otros hogares con ese mismo teléfono. La encuesta incompleta espera en **Pendientes**.
+5. Al volver al hogar: **Pendientes → Retomar** (botón junto a la encuesta incompleta). La app abre en la Revisión, con la lista de lo que falta y un botón **Ir** a cada pendiente. Aparece un aviso naranja «Retomando la encuesta…».
+6. Completa lo que falta y pulsa **Guardar encuesta** (o **Guardar como incompleta** si todavía falta alguien: se puede retomar varias veces).
+7. Para abandonar la retoma sin guardar: **Descartar cambios** en el aviso naranja. La encuesta incompleta se queda como estaba.
+
+**Reglas**
+
+- Retomar usa el **mismo teléfono** donde se guardó la encuesta incompleta (es donde está la información).
+- Solo se retoman encuestas **incompletas**. Una encuesta marcada como completa no se reabre.
+- No se puede retomar con otra encuesta en curso: primero guárdala (completa o incompleta).
+- Si el cuestionario cambió de versión desde que se capturó la encuesta, la app lo avisa y pide confirmación.
+- No hace falta tener internet para retomar. Al guardar, el envío ocurre cuando haya señal.
+
+**En la hoja de Google:** la encuesta retomada **reemplaza** a la incompleta: la misma fila de `Hogares` (ahora con `_estado = completa`) y las filas de `integrantes` se sustituyen, sin duplicados. La columna `_retomas` indica cuántas veces se retomó (0 = nunca).
 
 ## Datos y privacidad
 
@@ -106,5 +133,6 @@ borrar del teléfono las encuestas ya confirmadas en la hoja, y exportar el resp
 ## Limitaciones conocidas
 
 - Detecta ID de hogar repetido solo dentro del mismo teléfono (usa prefijos por encuestador).
-- No hay edición de encuestas ya guardadas: se captura de nuevo y se borra la anterior.
+- Solo se pueden retomar las encuestas **incompletas**. No hay edición de encuestas completas: se captura de nuevo y se borra la anterior.
+- Retomar funciona solo en el teléfono donde se guardó la incompleta. Si ese teléfono se pierde antes de enviarla, la versión incompleta que ya llegó a la hoja es la que queda.
 - Las encuestas guardadas con la versión 1 de la app (formato distinto) no se envían: aparecen como «Formato anterior»; expórtalas con «Respaldo JSON».

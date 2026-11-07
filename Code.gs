@@ -1,9 +1,12 @@
 /**
- * Receptor de encuestas «Reconocimiento de Hogares» → Google Sheets  (v2.1, genérico, varios instrumentos).
+ * Receptor de encuestas «Reconocimiento de Hogares» → Google Sheets  (v2.2, genérico, varios instrumentos).
  *
  * Qué hace:
  *  - Exige un token (propiedad de script TOKEN) para aceptar datos.
  *  - Es idempotente: si la app reintenta un envío, no duplica filas (clave: _id).
+ *  - Reemplaza al retomar: si una encuesta incompleta se retoma en la app y se guarda de nuevo, llega con el
+ *    mismo _id y un número de retoma mayor (_retomas); la fila de la hoja y las filas de sus integrantes se
+ *    reemplazan en lugar de duplicarse. Un reenvío con el mismo número de retoma se ignora (duplicate).
  *  - NO depende de las preguntas del cuestionario: crea solo las columnas que falten.
  *    Por eso, al cambiar el cuestionario NO hay que tocar ni volver a publicar este script.
  *  - Escribe una pestaña por instrumento (la app indica el nombre: «Hogares», «Clinicas»…) con una
@@ -16,14 +19,15 @@
  *    Extensiones > Apps Script): el ID de la hoja de cálculo de destino.
  */
 
-var VERSION = '2.1.0';
+var VERSION = '2.2.0';
+var REV = 2;   // revisión del protocolo: la app exige >= 2 para enviar encuestas retomadas
 var SHEET_MAIN = 'Hogares';
-var FIXED_MAIN = ['_id', '_recibido_en', '_capturado_en', '_estado', '_version_app', '_version_cuestionario'];
+var FIXED_MAIN = ['_id', '_recibido_en', '_capturado_en', '_estado', '_version_app', '_version_cuestionario', '_retomas'];
 var FIXED_REP = ['_id_hogar', 'hogar_id', '_num'];
 
 /** Prueba de conexión desde la app («Probar conexión»). No expone datos. */
 function doGet(e) {
-  return json_({ status: 'ok', app: 'reconocimiento-hogares', version: VERSION });
+  return json_({ status: 'ok', app: 'reconocimiento-hogares', version: VERSION, rev: REV });
 }
 
 function doPost(e) {
@@ -52,8 +56,16 @@ function doPost(e) {
     var shMain = getSheet_(ss, mainName_(s.hoja), FIXED_MAIN[0]);
 
     // Idempotencia: la fila de «Hogares» es la marca de que el envío quedó completo.
-    if (idExists_(shMain, s.id)) {
-      return json_({ status: 'duplicate', id: s.id });
+    // Si ya existe, solo se reemplaza cuando llega una retoma más nueva que la guardada.
+    var incoming = Number(s.retomas) || 0;
+    var existing = rowsById_(shMain, s.id);
+    var replacing = false;
+    if (existing.length) {
+      if (incoming <= storedRetomas_(shMain, existing[existing.length - 1])) {
+        deleteOlderRowsById_(shMain, s.id);   // autocorrige si un intento anterior dejó filas repetidas
+        return json_({ status: 'duplicate', id: s.id, rev: REV });
+      }
+      replacing = true;
     }
 
     // 1) Bloques repetidos (integrantes, etc.)
@@ -79,14 +91,19 @@ function doPost(e) {
       _capturado_en: s.timestamp || '',
       _estado: s.estado || '',
       _version_app: s.appVersion || '',
-      _version_cuestionario: s.formVersion || ''
+      _version_cuestionario: s.formVersion || '',
+      _retomas: incoming
     };
     Object.keys(s.answers).forEach(function (k) { main[k] = s.answers[k]; });
     writeRows_(shMain, FIXED_MAIN, [main]);
 
-    return json_({ status: 'ok', id: s.id });
+    // Al reemplazar: la fila nueva ya quedó escrita al final; ahora se borra la anterior (en ese orden,
+    // para no perder datos si algo falla a la mitad).
+    if (replacing) deleteOlderRowsById_(shMain, s.id);
+
+    return json_({ status: 'ok', id: s.id, rev: REV, replaced: replacing });
   } catch (err) {
-    return json_({ status: 'error', message: String(err && err.message ? err.message : err) });
+    return json_({ status: 'error', message: String(err && err.message ? err.message : err), rev: REV });
   } finally {
     if (locked) {
       try { lock.releaseLock(); } catch (_) { /* nada */ }
@@ -209,12 +226,32 @@ function writeRows_(sh, fixed, rows) {
   sh.getRange(start, 1, values.length, header.length).setValues(values);
 }
 
-function idExists_(sh, id) {
+/** Números de fila (ascendente) cuya primera columna es exactamente este id. */
+function rowsById_(sh, id) {
   var last = sh.getLastRow();
-  if (last < 2) return false;
-  var found = sh.getRange(2, 1, last - 1, 1)
-    .createTextFinder(String(id)).matchEntireCell(true).findNext();
-  return found !== null;
+  var rows = [];
+  if (last < 2) return rows;
+  var ids = sh.getRange(2, 1, last - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(id)) rows.push(i + 2);
+  }
+  return rows;
+}
+
+/** Número de retoma guardado en una fila (0 si la hoja es anterior y no tiene la columna). */
+function storedRetomas_(sh, row) {
+  var lastCol = sh.getLastColumn();
+  if (lastCol < 1) return 0;
+  var header = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+  var c = header.indexOf('_retomas');
+  if (c === -1) return 0;
+  return Number(sh.getRange(row, c + 1).getValue()) || 0;
+}
+
+/** Deja una sola fila con este id (la última) y borra las anteriores. */
+function deleteOlderRowsById_(sh, id) {
+  var rows = rowsById_(sh, id);
+  for (var i = rows.length - 2; i >= 0; i--) sh.deleteRow(rows[i]);
 }
 
 function deleteRowsById_(sh, id) {

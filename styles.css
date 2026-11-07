@@ -434,3 +434,10 @@ details.member[open] > summary { border-bottom: 1px solid var(--line-soft); }
 }
 .fs-btn.is-active { background: var(--brand-faint); border-color: var(--brand); }
 .formtag { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 6px; margin-right: 4px; border-radius: 6px; background: var(--brand-faint); color: var(--brand-dark); }
+
+/* ---------- Retomar una encuesta incompleta ---------- */
+.resume-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 12px; font-size: 13px; font-weight: 600; color: #7c2d12; background: #ffedd5; border: 1px solid #fdba74; border-radius: 10px; }
+.resume-banner[hidden] { display: none; }
+.resume-banner .linkbtn { color: #7c2d12; }
+.btn-sm { min-height: 36px; padding: 6px 10px; font-size: 13px; }
+td.rowact { white-space: nowrap; }

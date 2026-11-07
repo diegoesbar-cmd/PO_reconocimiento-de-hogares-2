@@ -4,7 +4,8 @@
   // ======================================================================
   //  Configuración
   // ======================================================================
-  const APP_VERSION = '2.1.2';
+  const APP_VERSION = '2.2.0';
+  const SCRIPT_REV_MIN = 2;                    // revisión mínima del script de Google para enviar encuestas retomadas
   const MAX_REPEAT = 25;                       // máximo de registros por bloque repetido
   const DB_NAME = 'OfflineSurveysDB';
   const DB_VERSION = 2;
@@ -256,6 +257,9 @@
   let draftTimer = null;
   let suspendDraft = false;
   let lastTabsKey = '';
+  // Si no es null, el formulario contiene una encuesta incompleta que se está retomando:
+  // { id: id de la encuesta guardada, retomas: número de retoma que se guardará, label: ID visible }
+  let resumeInfo = null;
 
   function newMember() { return { uid: state.nextUid++ }; }
 
@@ -612,6 +616,14 @@
     $('stepLabel').textContent = `Paso ${idx + 1} de ${vis.length}: ${stepTitle(state.step)}`;
     $('btnPrev').hidden = idx === 0;
     $('btnNext').hidden = state.step === REVIEW;
+    $('btnPause').hidden = state.step === REVIEW;
+  }
+
+  // «Pausar»: salta a la revisión sin validar la sección actual, para poder guardar la entrevista
+  // como incompleta (p. ej. cuando faltan personas del hogar). Después se retoma desde Pendientes.
+  function pauseSurvey() {
+    clearErrors();
+    showStep(REVIEW);
   }
 
   function refresh() {
@@ -883,7 +895,9 @@
       });
     });
     return {
-      id: uuid(),
+      // Al retomar se conserva el id: la encuesta guardada se reemplaza (en el teléfono y en la hoja)
+      id: resumeInfo ? resumeInfo.id : uuid(),
+      retomas: resumeInfo ? resumeInfo.retomas : 0,
       timestamp: new Date().toISOString(),
       appVersion: APP_VERSION,
       formId: Q.meta.formId,
@@ -912,11 +926,12 @@
       const hid = String(rec.answers[ID_FIELD] || '').trim();
       try {
         const all = await getAllSurveys();
-        if (hid && all.some((x) => x.answers && String(x.answers[ID_FIELD] || '') === hid) &&
+        // Al retomar, la encuesta que se reemplaza no cuenta como repetida
+        if (hid && all.some((x) => x.id !== rec.id && x.answers && String(x.answers[ID_FIELD] || '') === hid) &&
             !confirm(`Ya hay una encuesta con el ID ${hid} en este dispositivo.\n\n¿Guardar de todos modos?`)) {
           return;
         }
-        await addSurvey(rec);
+        if (resumeInfo) await putSurvey(rec); else await addSurvey(rec);
       } catch (err) {
         console.error(err);
         toast('No se pudo guardar la encuesta: ' + (err && err.message ? err.message : err) +
@@ -929,9 +944,10 @@
       lsSet(LS_REMEMBER, JSON.stringify(mem));
       if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
+      const wasResume = !!resumeInfo;
       await resetForm();
       await refreshPending();
-      toast(`Encuesta ${hid || '(sin ID)'} guardada en este dispositivo${incomplete ? ' como incompleta' : ''}.`, 'ok');
+      toast(`Encuesta ${hid || '(sin ID)'} ${wasResume ? 'actualizada' : 'guardada'} en este dispositivo${incomplete ? ' como incompleta' : ''}.`, 'ok');
       syncPending();
     } finally {
       saving = false;
@@ -942,6 +958,8 @@
     suspendDraft = true;
     clearTimeout(draftTimer);
     try {
+      resumeInfo = null;
+      updateResumeBanner();
       freshState();
       buildAll();
       lastTabsKey = '';
@@ -1012,19 +1030,24 @@
   }
 
   async function addSurvey(rec) { const tx = await newTx('surveys', 'readwrite'); tx.objectStore('surveys').add(rec); await txDone(tx); }
+  async function putSurvey(rec) { const tx = await newTx('surveys', 'readwrite'); tx.objectStore('surveys').put(rec); await txDone(tx); }
   async function getAllSurveys() { const tx = await newTx('surveys', 'readonly'); return (await reqResult(tx.objectStore('surveys').getAll())) || []; }
   async function deleteSurvey(id) { const tx = await newTx('surveys', 'readwrite'); tx.objectStore('surveys').delete(id); await txDone(tx); }
   async function putMeta(rec) { const tx = await newTx('meta', 'readwrite'); tx.objectStore('meta').put(rec); await txDone(tx); }
   async function getMeta(key) { const tx = await newTx('meta', 'readonly'); return reqResult(tx.objectStore('meta').get(key)); }
   async function deleteMeta(key) { const tx = await newTx('meta', 'readwrite'); tx.objectStore('meta').delete(key); await txDone(tx); }
 
-  async function markSynced(id) {
+  // Marca como enviada solo si el registro sigue siendo la misma versión que se envió
+  // (si mientras tanto se retomó y guardó de nuevo, esa versión nueva sigue pendiente).
+  async function markSynced(id, sentTimestamp) {
     const tx = await newTx('surveys', 'readwrite');
     const st = tx.objectStore('surveys');
     const g = st.get(id);
     g.onsuccess = () => {
       const rec = g.result;
-      if (rec) { rec.synced = true; rec.syncedAt = new Date().toISOString(); st.put(rec); }
+      if (rec && (sentTimestamp === undefined || rec.timestamp === sentTimestamp)) {
+        rec.synced = true; rec.syncedAt = new Date().toISOString(); st.put(rec);
+      }
     };
     await txDone(tx);
   }
@@ -1043,23 +1066,30 @@
     try {
       await putMeta({
         key: DRAFT_KEY, v: 2, formVersion: Q.meta.version, step: state.step,
-        answers: state.answers, reps: state.reps, nextUid: state.nextUid, savedAt: Date.now()
+        answers: state.answers, reps: state.reps, nextUid: state.nextUid, savedAt: Date.now(),
+        resume: resumeInfo
       });
     } catch (e) { console.warn('No se pudo guardar el borrador', e); }
   }
 
+  function hasContent(answers, reps) {
+    const skip = new Set([Q.meta.inicio, Q.meta.fin].concat(PREFILLED));
+    const anyTop = Object.keys(answers || {}).some((k) => !skip.has(k) && !isEmpty(answers[k]));
+    const anyRep = Object.keys(reps || {}).some((k) => (reps[k] || []).some((m) => Object.keys(m).some((f) => f !== 'uid' && !isEmpty(m[f]))));
+    return anyTop || anyRep;
+  }
+
   function draftHasContent(d) {
     if (!d || d.v !== 2 || !d.answers) return false;
-    const skip = new Set([Q.meta.inicio, Q.meta.fin].concat(PREFILLED));
-    const anyTop = Object.keys(d.answers).some((k) => !skip.has(k) && !isEmpty(d.answers[k]));
-    const anyRep = Object.keys(d.reps || {}).some((k) => (d.reps[k] || []).some((m) => Object.keys(m).some((f) => f !== 'uid' && !isEmpty(m[f]))));
-    return anyTop || anyRep;
+    return !!d.resume || hasContent(d.answers, d.reps);
   }
 
   async function restoreDraft() {
     let d;
     try { d = await getMeta(DRAFT_KEY); } catch (_) { return; }
     if (!draftHasContent(d)) return;
+    resumeInfo = (d.resume && d.resume.id) ? d.resume : null;
+    updateResumeBanner();
     state.answers = d.answers;
     state.reps = {};
     repDefs.forEach((r) => {
@@ -1075,7 +1105,74 @@
     const vis = visibleSteps(ev);
     showStep(vis.indexOf(d.step) >= 0 ? d.step : 0, true);
     suspendDraft = false;
-    toast('Se recuperó la encuesta que tenías en curso.', 'ok');
+    toast(resumeInfo ? `Se recuperó la encuesta ${resumeInfo.label || ''} que estabas retomando.` : 'Se recuperó la encuesta que tenías en curso.', 'ok');
+  }
+
+  // ======================================================================
+  //  Retomar una encuesta incompleta
+  // ======================================================================
+  function updateResumeBanner() {
+    const b = $('resumeBanner');
+    if (!b) return;
+    b.hidden = !resumeInfo;
+    const t = $('resumeText');
+    if (t) t.textContent = resumeInfo ? `Retomando la encuesta ${resumeInfo.label || '(sin ID)'}. Completa lo que falta y guarda: reemplazará a la incompleta.` : '';
+  }
+
+  async function resumeSurvey(id) {
+    let rows = [];
+    try { rows = await getAllSurveys(); } catch (_) { toast('No se pudieron leer las encuestas del dispositivo.', 'err'); return; }
+    const s = rows.find((x) => x.id === id);
+    if (!s || !s.answers) return;
+    if (s.estado !== 'incompleta') { toast('Solo se pueden retomar encuestas incompletas.', 'err'); return; }
+
+    const c = cfgOf(s);
+    if (c.key !== FORM_KEY) {
+      toast(`Esa encuesta es de «${c.nombre}». Cambia a ese instrumento (selector de arriba) y vuelve a pulsar Retomar.`, 'err');
+      return;
+    }
+    if (resumeInfo || hasContent(state.answers, state.reps)) {
+      toast('Hay una encuesta en curso. Guárdala (completa o incompleta) antes de retomar otra.', 'err');
+      return;
+    }
+    const lbl = surveyLabel(s);
+    if (s.formVersion !== Q.meta.version &&
+        !confirm(`La encuesta ${lbl} se capturó con la versión ${s.formVersion} del cuestionario y ahora está la ${Q.meta.version}.\n\nPueden haber cambiado preguntas. ¿Retomar de todos modos?`)) {
+      return;
+    }
+
+    suspendDraft = true;
+    clearTimeout(draftTimer);
+    try {
+      freshState();
+      Object.keys(s.answers).forEach((k) => { state.answers[k] = s.answers[k]; });
+      state.nextUid = 1;
+      state.reps = {};
+      repDefs.forEach((r) => {
+        const list = (s.repeats && s.repeats[r.name]) || [];
+        state.reps[r.name] = list.length
+          ? list.map((o) => Object.assign({ uid: state.nextUid++ }, o))
+          : [newMember()];
+      });
+      resumeInfo = { id: s.id, retomas: (Number(s.retomas) || 0) + 1, label: lbl };
+      updateResumeBanner();
+      buildAll();
+      lastTabsKey = '';
+      showStep(REVIEW, true);     // la revisión lista lo que falta, con un botón «Ir» a cada pendiente
+    } finally {
+      suspendDraft = false;
+    }
+    await saveDraft();
+    closeModal('syncModal');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    toast(`Retomando la encuesta ${lbl}. Revisa lo pendiente y guarda al terminar.`, 'ok');
+  }
+
+  async function discardResume() {
+    if (!resumeInfo) return;
+    if (!confirm(`Se descartan los cambios hechos desde que retomaste la encuesta ${resumeInfo.label || ''}.\n\nLa encuesta guardada se queda como estaba. ¿Continuar?`)) return;
+    await resetForm();
+    toast('Cambios descartados. La encuesta incompleta sigue guardada en Pendientes.', 'ok');
   }
 
   // ======================================================================
@@ -1093,7 +1190,8 @@
     return {
       hoja: c.hoja, idCampo: c.idField,
       id: s.id, timestamp: s.timestamp, appVersion: s.appVersion, formId: s.formId,
-      formVersion: s.formVersion, estado: s.estado, answers: s.answers, repeats: s.repeats
+      formVersion: s.formVersion, estado: s.estado, answers: s.answers, repeats: s.repeats,
+      retomas: Number(s.retomas) || 0
     };
   }
 
@@ -1141,7 +1239,13 @@
       for (const s of pending) {
         try {
           const r = await postSurvey(s);
-          if (r && (r.status === 'ok' || r.status === 'duplicate')) { await markSynced(s.id); ok++; }
+          // Una encuesta retomada solo se da por enviada si el script de Google sabe reemplazar filas
+          // (un script anterior respondería «duplicate» sin actualizar la hoja y se perderían los cambios).
+          const oldScript = (Number(s.retomas) || 0) > 0 && r && (Number(r.rev) || 0) < SCRIPT_REV_MIN;
+          if (oldScript) {
+            fail++;
+            lastErr = 'El script de Google es anterior a la v2.2: actualízalo (ver README) para enviar encuestas retomadas.';
+          } else if (r && (r.status === 'ok' || r.status === 'duplicate')) { await markSynced(s.id, s.timestamp); ok++; }
           else {
             fail++;
             lastErr = (r && r.message) || (r && r.status) || 'Error desconocido';
@@ -1197,13 +1301,15 @@
       const nrep = s.repeats ? Object.keys(s.repeats).reduce((n, k) => n + (s.repeats[k] || []).length, 0) : (s.totalMiembros || 0);
       let st;
       if (!s.answers) st = '<span class="state old">Formato anterior</span>';
+      else if (s.estado === 'incompleta') st = `<span class="state inc">Incompleta · ${s.synced ? 'enviada' : 'pendiente'}</span>`;
       else if (s.synced) st = '<span class="state sent">Enviada</span>';
-      else if (s.estado === 'incompleta') st = '<span class="state inc">Incompleta · pendiente</span>';
       else st = '<span class="state pend">Pendiente</span>';
       const fecha = s.answers ? (s.answers[cfgOf(s).dateField] || '') : (s.fecha || '');
       const tipo = s.answers ? `<small class="formtag">${esc(cfgOf(s).corto)}</small> ` : '';
+      const retomar = (s.answers && s.estado === 'incompleta')
+        ? `<button type="button" class="btn btn-primary btn-sm" data-action="resume" data-id="${esc(s.id)}">Retomar</button> ` : '';
       return `<tr><td>${tipo}<strong>${esc(surveyLabel(s))}</strong></td><td>${esc(fecha)}</td><td>${esc(nrep)}</td><td>${st}</td>` +
-        `<td><button type="button" class="btn btn-danger" data-action="delete" data-id="${esc(s.id)}">Borrar</button></td></tr>`;
+        `<td class="rowact">${retomar}<button type="button" class="btn btn-danger" data-action="delete" data-id="${esc(s.id)}">Borrar</button></td></tr>`;
     }).join('');
   }
 
@@ -1415,6 +1521,7 @@
   function bindEvents() {
     $('btnPrev').addEventListener('click', goPrev);
     $('btnNext').addEventListener('click', goNext);
+    $('btnPause').addEventListener('click', pauseSurvey);
     $('btnPending').addEventListener('click', () => openModal('syncModal'));
     $('btnConfig').addEventListener('click', openConfig);
     $('btnSyncNow').addEventListener('click', () => syncPending(true));
@@ -1456,9 +1563,12 @@
     });
 
     $('surveyTableBody').addEventListener('click', (e) => {
+      const r = e.target.closest('[data-action="resume"]');
+      if (r) { resumeSurvey(r.dataset.id); return; }
       const b = e.target.closest('[data-action="delete"]');
       if (b) deleteLocal(b.dataset.id);
     });
+    $('btnResumeDiscard').addEventListener('click', discardResume);
 
     window.addEventListener('online', () => { updateNetwork(); syncPending(); });
     window.addEventListener('offline', updateNetwork);

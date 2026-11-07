@@ -6,7 +6,7 @@
  *   y APP_VERSION en app.js. */
 self.window = self;
 importScripts('cuestionario.js', 'clinica.js');
-const VERSION = '2.1.2';
+const VERSION = '2.2.0';
 const FORMS = self.CUESTIONARIOS || {};
 const FORM = Object.keys(FORMS).sort().map((k) => k + FORMS[k].meta.version).join('_') || '0';
 const CACHE = `hogares-${VERSION}-${FORM}`;
